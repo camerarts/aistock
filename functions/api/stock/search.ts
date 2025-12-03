@@ -1,5 +1,6 @@
 
-import { Env, jsonResponse, errorResponse, fetchAkTools, PagesFunction, checkD1Binding } from '../../utils';
+
+import { Env, jsonResponse, errorResponse, fetchAkTools, PagesFunction, checkD1Binding, initDb } from '../../utils';
 
 interface StockItem {
   code: string;
@@ -11,6 +12,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   // Check D1 Binding
   const dbError = checkD1Binding(context.env);
   if (dbError) return dbError;
+
+  // AUTO-INIT: Ensure tables exist on first access (cheap IF NOT EXISTS check)
+  await initDb(context.env.DB);
 
   const url = new URL(context.request.url);
   const keyword = url.searchParams.get('keyword');
