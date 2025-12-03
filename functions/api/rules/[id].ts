@@ -1,6 +1,10 @@
-import { Env, jsonResponse, errorResponse, PagesFunction } from '../../utils';
+
+import { Env, jsonResponse, errorResponse, PagesFunction, checkD1Binding } from '../../utils';
 
 export const onRequestPatch: PagesFunction<Env> = async (context) => {
+  const dbError = checkD1Binding(context.env);
+  if (dbError) return dbError;
+
   const id = context.params.id as string;
   try {
     const body: any = await context.request.json();
@@ -40,6 +44,9 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
 };
 
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
+  const dbError = checkD1Binding(context.env);
+  if (dbError) return dbError;
+
   const id = context.params.id as string;
   try {
     await context.env.DB.prepare('DELETE FROM rules WHERE id = ?').bind(id).run();
