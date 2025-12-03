@@ -1,7 +1,11 @@
 
-import { Env, jsonResponse, KLineItem, PagesFunction } from '../../utils';
+import { Env, jsonResponse, KLineItem, PagesFunction, checkD1Binding } from '../../utils';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
+  // Check D1 Binding
+  const dbError = checkD1Binding(context.env);
+  if (dbError) return dbError;
+
   const url = new URL(context.request.url);
   const code = url.searchParams.get('code');
   const countStr = url.searchParams.get('count') || '200';
@@ -26,10 +30,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   if (code.startsWith('8') || code.startsWith('4') || code.startsWith('9')) exchange = 'BJ';
 
   // Construct Upstream URL manually
+  // Requirement: Only use symbol param, remove period/adjust
   const baseUrl = context.env.AKTOOLS_BASE_URL || 'http://localhost:8000';
   const upstreamUrl = new URL('/api/public/stock_zh_a_hist', baseUrl);
   upstreamUrl.searchParams.append('symbol', code);
-  // No period or adjust params as requested
 
   try {
       // Parallel execution: Fetch K-Line data AND Fetch Stock Name from Cache
