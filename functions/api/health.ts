@@ -1,4 +1,4 @@
-import { Env, jsonResponse, fetchAkTools, PagesFunction } from '../../utils';
+import { Env, jsonResponse, fetchAkTools, PagesFunction } from '../utils';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const start = Date.now();
@@ -6,8 +6,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   
   try {
       // Light probe to AkTools to check connectivity
-      // Using a fast endpoint like getting 1 record of spot data or just checking root
-      // Here we assume checking a known public API
       await fetchAkTools('/api/public/stock_zh_a_spot_em', context.env, { limit: '1' }); 
       upstreamStatus = 'ok';
   } catch (e) {
