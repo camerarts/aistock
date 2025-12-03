@@ -1,6 +1,5 @@
 
-
-import { Env, jsonResponse, errorResponse, PagesFunction, checkD1Binding, initDb } from '../../utils';
+import { Env, jsonResponse, errorResponse, PagesFunction, checkD1Binding, initDb } from '../utils';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const dbError = checkD1Binding(context.env);
@@ -9,8 +8,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   // Ensure table exists
   await initDb(context.env.DB);
 
-  const { results } = await context.env.DB.prepare('SELECT * FROM alerts ORDER BY created_at DESC LIMIT 50').all();
-  return jsonResponse({ items: results });
+  try {
+    const { results } = await context.env.DB.prepare('SELECT * FROM rules ORDER BY created_at DESC').all();
+    return jsonResponse({ items: results });
+  } catch (e: any) {
+    return errorResponse('List Rules Failed', e.message);
+  }
 };
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -20,19 +23,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   // Ensure table exists
   await initDb(context.env.DB);
 
-  const url = new URL(context.request.url);
-  // Support clearing
-  if (url.searchParams.has('clear')) {
-      await context.env.DB.prepare('DELETE FROM alerts').run();
-      return jsonResponse({ success: true });
+  try {
+    const body: any = await context.request.json();
+    const id = crypto.randomUUID();
+    const now = Date.now();
+    
+    await context.env.DB.prepare(
+      'INSERT INTO rules (id, code, exchange, name, formula, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(id, body.code, body.exchange, body.name, body.formula, body.enabled ? 1 : 0, now, now).run();
+
+    return jsonResponse({ id, ...body });
+  } catch (e: any) {
+    return errorResponse('Create Rule Failed', e.message);
   }
-
-  // Support Creating (Internal usage mostly)
-  const body: any = await context.request.json();
-  const id = crypto.randomUUID();
-  await context.env.DB.prepare(
-      'INSERT INTO alerts (id, rule_id, code, exchange, name, trigger_date, message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(id, body.rule_id, body.code, body.exchange, body.name, body.trigger_date, body.message, Date.now()).run();
-
-  return jsonResponse({ id });
 };
