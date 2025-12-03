@@ -1,4 +1,5 @@
-import { Env, jsonResponse, errorResponse, PagesFunction } from '../../utils';
+
+import { Env, jsonResponse, errorResponse, PagesFunction } from '../utils';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const url = new URL(context.request.url);
