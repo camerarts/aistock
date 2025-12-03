@@ -1,5 +1,4 @@
 
-
 // --- Cloudflare Types Polyfill ---
 export interface D1Result<T = unknown> {
   results: T[];
@@ -79,6 +78,52 @@ export const checkD1Binding = (env: Env) => {
   }
   return null;
 };
+
+// --- DB Initialization Helper ---
+export async function initDb(db: D1Database) {
+  try {
+    await db.batch([
+      // 1. Stock List Cache Table
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS stock_list_cache (
+          id TEXT PRIMARY KEY,
+          json TEXT NOT NULL,
+          updated_at INTEGER NOT NULL
+        )
+      `),
+      // 2. Rules Table
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS rules (
+          id TEXT PRIMARY KEY,
+          code TEXT NOT NULL,
+          exchange TEXT,
+          name TEXT,
+          formula TEXT NOT NULL,
+          enabled INTEGER DEFAULT 1,
+          created_at INTEGER,
+          updated_at INTEGER
+        )
+      `),
+      // 3. Alerts Table
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS alerts (
+          id TEXT PRIMARY KEY,
+          rule_id TEXT,
+          code TEXT,
+          exchange TEXT,
+          name TEXT,
+          trigger_date TEXT,
+          message TEXT,
+          created_at INTEGER
+        )
+      `)
+    ]);
+  } catch (e) {
+    console.error("Auto-init DB failed:", e);
+    // We don't throw here to allow the main query to try its luck, 
+    // or you could throw if strict schema is required.
+  }
+}
 
 // --- AkTools Wrapper ---
 export async function fetchAkTools(path: string, env: Env, params: Record<string, string> = {}) {
