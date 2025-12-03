@@ -1,3 +1,4 @@
+
 import { Env, jsonResponse, KLineItem, PagesFunction } from '../../utils';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -13,16 +14,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const cacheKey = new Request(cacheUrl.toString(), context.request);
   const cache = (caches as any).default;
 
+  // Try to find in cache first
   let response = await cache.match(cacheKey);
   if (response) {
     return response;
   }
 
-  // Construct Upstream URL manually to have full control and error reporting
+  // Construct Upstream URL manually
   const baseUrl = context.env.AKTOOLS_BASE_URL || 'http://localhost:8000';
   const upstreamUrl = new URL('/api/public/stock_zh_a_hist', baseUrl);
   upstreamUrl.searchParams.append('symbol', code);
-  // REMOVED: period=daily, adjust=... as requested
+  // No period or adjust params as requested
 
   try {
       const res = await fetch(upstreamUrl.toString(), {
@@ -34,13 +36,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
       if (!res.ok) {
         const text = await res.text();
-        // Strict Error Reporting: Return upstream details
         return new Response(JSON.stringify({
             error: 'Upstream Failed',
             detail: {
                 upstreamUrl: upstreamUrl.toString(),
                 status: res.status,
-                bodySnippet: text.slice(0, 200) // First 200 chars
+                bodySnippet: text.slice(0, 200)
             }
         }), { 
             status: 502, 
@@ -62,9 +63,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       }
 
       // Standardize: Map Chinese fields to internal format
+      // STRICT REQUIREMENT: t must be YYYY-MM-DD (10 chars)
       const items: KLineItem[] = rawData.map((d: any) => ({
-          // FORCE YYYY-MM-DD: Take first 10 chars (handles "2023-01-01T00..." or "2023-01-01")
-          t: String(d['日期']).substring(0, 10),
+          t: String(d['日期']).slice(0, 10), 
           o: parseFloat(d['开盘']),
           h: parseFloat(d['最高']),
           l: parseFloat(d['最低']),
