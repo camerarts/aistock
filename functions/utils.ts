@@ -68,6 +68,18 @@ export const errorResponse = (error: string, detail: any = null, status = 500) =
   });
 };
 
+// --- D1 Binding Check Helper ---
+export const checkD1Binding = (env: Env) => {
+  if (!env.DB) {
+    return new Response(JSON.stringify({
+        error: "D1_NOT_BOUND",
+        detail: "Missing DB binding in Cloudflare Pages",
+        hint: "Bind D1 as DB in Pages settings"
+    }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+  return null;
+};
+
 // --- AkTools Wrapper ---
 export async function fetchAkTools(path: string, env: Env, params: Record<string, string> = {}) {
   const baseUrl = env.AKTOOLS_BASE_URL || 'http://localhost:8000'; // Fallback
@@ -103,8 +115,13 @@ export class FormulaEngine {
   private len: number;
 
   constructor(items: KLineItem[]) {
-    this.items = items;
-    this.len = items.length;
+    // Safety check: ensure items is an array
+    if (!Array.isArray(items)) {
+        this.items = [];
+    } else {
+        this.items = items;
+    }
+    this.len = this.items.length;
   }
 
   // Get series array
@@ -224,15 +241,17 @@ export class FormulaEngine {
             finalVal = !!resultSeries;
         }
 
+        const triggerDate = this.items[this.len - 1].t;
+
         return {
             triggered: finalVal,
             index: this.len - 1,
-            date: this.items[this.len - 1].t,
-            explain: finalVal ? `规则触发于 ${this.items[this.len - 1].t}` : '规则未触发'
+            date: triggerDate,
+            explain: finalVal ? `触发于 ${triggerDate}` : '未触发'
         };
 
     } catch (e: any) {
-        throw new Error(`公式语法错误: ${e.message}`);
+        throw new Error(`公式错误: ${e.message}`);
     }
   }
 }
