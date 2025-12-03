@@ -1,4 +1,4 @@
-import { Env, jsonResponse, errorResponse, fetchAkTools, KLineItem, PagesFunction } from '../../utils';
+import { Env, jsonResponse, KLineItem, PagesFunction } from '../../utils';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const url = new URL(context.request.url);
@@ -6,10 +6,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const countStr = url.searchParams.get('count') || '200';
   const count = parseInt(countStr, 10);
 
-  if (!code) return errorResponse('Missing code', null, 400);
+  if (!code) return jsonResponse({ error: 'Missing code' }, 400);
 
-  // Cache Strategy: Use Cloudflare Cache API
-  // Key includes code and count to prevent mismatch
+  // Cache Strategy
   const cacheUrl = new URL(context.request.url);
   const cacheKey = new Request(cacheUrl.toString(), context.request);
   const cache = (caches as any).default;
@@ -19,20 +18,50 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     return response;
   }
 
+  // Construct Upstream URL manually to have full control and error reporting
+  const baseUrl = context.env.AKTOOLS_BASE_URL || 'http://localhost:8000';
+  const upstreamUrl = new URL('/api/public/stock_zh_a_hist', baseUrl);
+  upstreamUrl.searchParams.append('symbol', code);
+  // REMOVED: period=daily, adjust=... as requested
+
   try {
-      // Fetch from Upstream without calculating start/end dates
-      // Params: symbol=CODE, period=daily, adjust= (empty)
-      const rawData = await fetchAkTools('/api/public/stock_zh_a_hist', context.env, {
-        symbol: code,
-        period: 'daily',
-        adjust: '' 
+      const res = await fetch(upstreamUrl.toString(), {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(context.env.AKTOOLS_API_KEY ? { 'X-API-KEY': context.env.AKTOOLS_API_KEY } : {})
+        }
       });
 
-      if (!Array.isArray(rawData)) {
-        throw new Error('Upstream returned invalid data format (expected array)');
+      if (!res.ok) {
+        const text = await res.text();
+        // Strict Error Reporting: Return upstream details
+        return new Response(JSON.stringify({
+            error: 'Upstream Failed',
+            detail: {
+                upstreamUrl: upstreamUrl.toString(),
+                status: res.status,
+                bodySnippet: text.slice(0, 200) // First 200 chars
+            }
+        }), { 
+            status: 502, 
+            headers: { 'Content-Type': 'application/json' } 
+        });
       }
 
-      // Standardize
+      const rawData: any = await res.json();
+
+      if (!Array.isArray(rawData)) {
+        return new Response(JSON.stringify({
+            error: 'Invalid Data Format',
+            detail: {
+                message: 'Expected array from upstream',
+                received: typeof rawData,
+                upstreamUrl: upstreamUrl.toString()
+            }
+        }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      // Standardize: Map Chinese fields to internal format
       const items: KLineItem[] = rawData.map((d: any) => ({
           t: d['日期'],
           o: parseFloat(d['开盘']),
@@ -42,14 +71,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           v: parseFloat(d['成交量'])
       }));
 
-      // Sort by date ascending
+      // Sort by date ascending (oldest to newest)
       items.sort((a, b) => a.t.localeCompare(b.t));
 
-      // Slice to requested count (take the last N items)
-      // If count is larger than length, it takes all
+      // Slice: keep only the last N items
       const slicedItems = items.slice(-count);
       
-      // Determine exchange (rough inference for frontend display)
+      // Determine exchange (rough inference)
       let exchange = 'SZ';
       if (code.startsWith('6')) exchange = 'SH';
       if (code.startsWith('8') || code.startsWith('4') || code.startsWith('9')) exchange = 'BJ';
@@ -57,7 +85,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       const data = {
           code,
           exchange,
-          name: '', // Name is usually handled by search context
+          name: '', // Search fills this usually
           items: slicedItems
       };
 
@@ -70,7 +98,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       return response;
 
   } catch (e: any) {
-      // Return structured error, DO NOT mock
-      return errorResponse('Fetch Kline Failed', e.message, 500);
+      return new Response(JSON.stringify({
+          error: 'Internal Fetch Error',
+          detail: {
+              message: e.message,
+              upstreamUrl: upstreamUrl.toString()
+          }
+      }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 };
