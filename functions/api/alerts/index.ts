@@ -1,9 +1,13 @@
 
-import { Env, jsonResponse, errorResponse, PagesFunction, checkD1Binding } from '../../utils';
+
+import { Env, jsonResponse, errorResponse, PagesFunction, checkD1Binding, initDb } from '../../utils';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const dbError = checkD1Binding(context.env);
   if (dbError) return dbError;
+
+  // Ensure table exists
+  await initDb(context.env.DB);
 
   const { results } = await context.env.DB.prepare('SELECT * FROM alerts ORDER BY created_at DESC LIMIT 50').all();
   return jsonResponse({ items: results });
@@ -12,6 +16,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const dbError = checkD1Binding(context.env);
   if (dbError) return dbError;
+
+  // Ensure table exists
+  await initDb(context.env.DB);
 
   const url = new URL(context.request.url);
   // Support clearing
