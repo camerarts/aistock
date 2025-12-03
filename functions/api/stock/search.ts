@@ -1,6 +1,5 @@
 
-
-import { Env, jsonResponse, errorResponse, fetchAkTools, PagesFunction, checkD1Binding, initDb } from '../../utils';
+import { Env, jsonResponse, errorResponse, fetchAkTools, PagesFunction, checkD1Binding, initDb } from '../utils';
 
 interface StockItem {
   code: string;
