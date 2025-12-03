@@ -20,6 +20,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     return response;
   }
 
+  // Determine exchange (rough inference)
+  let exchange = 'SZ';
+  if (code.startsWith('6')) exchange = 'SH';
+  if (code.startsWith('8') || code.startsWith('4') || code.startsWith('9')) exchange = 'BJ';
+
   // Construct Upstream URL manually
   const baseUrl = context.env.AKTOOLS_BASE_URL || 'http://localhost:8000';
   const upstreamUrl = new URL('/api/public/stock_zh_a_hist', baseUrl);
@@ -27,12 +32,16 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   // No period or adjust params as requested
 
   try {
-      const res = await fetch(upstreamUrl.toString(), {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(context.env.AKTOOLS_API_KEY ? { 'X-API-KEY': context.env.AKTOOLS_API_KEY } : {})
-        }
-      });
+      // Parallel execution: Fetch K-Line data AND Fetch Stock Name from Cache
+      const [res, dbResult] = await Promise.all([
+          fetch(upstreamUrl.toString(), {
+            headers: {
+              'Content-Type': 'application/json',
+              ...(context.env.AKTOOLS_API_KEY ? { 'X-API-KEY': context.env.AKTOOLS_API_KEY } : {})
+            }
+          }),
+          context.env.DB.prepare('SELECT json FROM stock_list_cache WHERE id = ?').bind('default').first<{ json: string }>()
+      ]);
 
       if (!res.ok) {
         const text = await res.text();
@@ -79,15 +88,22 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       // Slice: keep only the last N items
       const slicedItems = items.slice(-count);
       
-      // Determine exchange (rough inference)
-      let exchange = 'SZ';
-      if (code.startsWith('6')) exchange = 'SH';
-      if (code.startsWith('8') || code.startsWith('4') || code.startsWith('9')) exchange = 'BJ';
+      // Resolve Name
+      let name = '';
+      if (dbResult && dbResult.json) {
+          try {
+              const allStocks = JSON.parse(dbResult.json);
+              const found = allStocks.find((s: any) => s.code === code);
+              if (found) name = found.name;
+          } catch (e) {
+              // Ignore JSON parse errors for cache
+          }
+      }
 
       const data = {
           code,
           exchange,
-          name: '', // Search fills this usually
+          name, 
           items: slicedItems
       };
 
