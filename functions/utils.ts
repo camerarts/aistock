@@ -120,6 +120,8 @@ export async function initDb(db: D1Database) {
     ]);
   } catch (e) {
     console.error("Auto-init DB failed:", e);
+    // We don't throw here to allow the main query to try its luck, 
+    // or you could throw if strict schema is required.
   }
 }
 
