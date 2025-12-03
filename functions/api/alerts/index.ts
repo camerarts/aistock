@@ -1,11 +1,18 @@
-import { Env, jsonResponse, errorResponse, PagesFunction } from '../../utils';
+
+import { Env, jsonResponse, errorResponse, PagesFunction, checkD1Binding } from '../../utils';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
+  const dbError = checkD1Binding(context.env);
+  if (dbError) return dbError;
+
   const { results } = await context.env.DB.prepare('SELECT * FROM alerts ORDER BY created_at DESC LIMIT 50').all();
   return jsonResponse({ items: results });
 };
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const dbError = checkD1Binding(context.env);
+  if (dbError) return dbError;
+
   const url = new URL(context.request.url);
   // Support clearing
   if (url.searchParams.has('clear')) {
