@@ -20,22 +20,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 
   try {
-      // Calculate Dates: Get enough history to cover 'count' trading days
-      // We ask for 2.5x calendar days to be safe against weekends/holidays
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(endDate.getDate() - Math.ceil(count * 2.5)); 
-      
-      const startStr = startDate.toISOString().split('T')[0].replace(/-/g, '');
-      const endStr = endDate.toISOString().split('T')[0].replace(/-/g, '');
-
+      // Fetch from Upstream without calculating start/end dates
+      // Params: symbol=CODE, period=daily, adjust= (empty)
       const rawData = await fetchAkTools('/api/public/stock_zh_a_hist', context.env, {
         symbol: code,
         period: 'daily',
-        start_date: startStr,
-        end_date: endStr,
-        adjust: 'qfq'
+        adjust: '' 
       });
+
+      if (!Array.isArray(rawData)) {
+        throw new Error('Upstream returned invalid data format (expected array)');
+      }
 
       // Standardize
       const items: KLineItem[] = rawData.map((d: any) => ({
@@ -45,12 +40,16 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
           l: parseFloat(d['最低']),
           c: parseFloat(d['收盘']),
           v: parseFloat(d['成交量'])
-      })).sort((a: any, b: any) => a.t.localeCompare(b.t));
+      }));
 
-      // Slice to requested count
+      // Sort by date ascending
+      items.sort((a, b) => a.t.localeCompare(b.t));
+
+      // Slice to requested count (take the last N items)
+      // If count is larger than length, it takes all
       const slicedItems = items.slice(-count);
       
-      // Determine exchange (rough inference)
+      // Determine exchange (rough inference for frontend display)
       let exchange = 'SZ';
       if (code.startsWith('6')) exchange = 'SH';
       if (code.startsWith('8') || code.startsWith('4') || code.startsWith('9')) exchange = 'BJ';
@@ -58,7 +57,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       const data = {
           code,
           exchange,
-          name: '', // Optional: Name is usually handled by search/cache, simplified here
+          name: '', // Name is usually handled by search context
           items: slicedItems
       };
 
@@ -71,6 +70,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       return response;
 
   } catch (e: any) {
-      return errorResponse('Fetch Kline Failed', e.message);
+      // Return structured error, DO NOT mock
+      return errorResponse('Fetch Kline Failed', e.message, 500);
   }
 };
