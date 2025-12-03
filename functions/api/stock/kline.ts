@@ -63,7 +63,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
       // Standardize: Map Chinese fields to internal format
       const items: KLineItem[] = rawData.map((d: any) => ({
-          t: d['日期'],
+          // FORCE YYYY-MM-DD: Take first 10 chars (handles "2023-01-01T00..." or "2023-01-01")
+          t: String(d['日期']).substring(0, 10),
           o: parseFloat(d['开盘']),
           h: parseFloat(d['最高']),
           l: parseFloat(d['最低']),
