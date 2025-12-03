@@ -1,4 +1,5 @@
 
+
 // --- Cloudflare Types Polyfill ---
 export interface D1Result<T = unknown> {
   results: T[];
@@ -179,10 +180,10 @@ export class FormulaEngine {
 
   // Very simple recursive parser/evaluator
   public evaluate(formula: string): { triggered: boolean, index: number, date: string, explain: string } {
-    // 1. Tokenize (Simple regex for splitting operators and functions)
-    // This is a "risky" part in a real production system, usually we use a real lexer.
-    // For MVP, we will try to transform the formula into a JS function that takes data arrays.
-    
+    if (this.len === 0) {
+        return { triggered: false, index: -1, date: '', explain: '无数据' };
+    }
+
     try {
         // Replace known variables with data calls
         const O = this.getSeries('o');
@@ -191,37 +192,6 @@ export class FormulaEngine {
         const C = this.getSeries('c');
         const V = this.getSeries('v');
 
-        // Helper to run operations safely
-        const run = (expr: string): any[] | boolean => {
-            // This is a simplified evaluator. In a real system, build an AST.
-            // Here we map common functions to our class methods.
-            
-            // Regex to parse function calls like MA(C, 20)
-            // We'll effectively rewrite the formula to valid JS operating on specific indices
-            // But doing that for arrays is hard.
-            // ALTERNATIVE: Evaluate index by index from end.
-            return [];
-        };
-
-        // --- Simplified MVP Execution: Evaluate ONLY the last candle (and history needed) ---
-        // We will execute the formula inside a loop context for the specific index
-        
-        let lastIdx = this.len - 1;
-        let triggered = false;
-        
-        // Transform formula to JS friendly
-        // MA(C,20) -> this.ma(C, 20, i)
-        // This is complex to regex. 
-        
-        // STRATEGY: Calculate all Indicators FIRST based on regex, store in temp vars, then evaluate logic.
-        
-        // 1. Extract all function calls
-        // 2. Compute arrays
-        // 3. Compare arrays at last index
-        
-        // For MVP, let's just expose a context object and use `new Function` (sandbox)
-        // Security Warning: This is "only for self use".
-        
         const context: any = {
            MA: this.MA.bind(this),
            EMA: this.EMA.bind(this),
@@ -238,10 +208,6 @@ export class FormulaEngine {
             .replace(/OR/g, '||')
             .replace(/NOT/g, '!');
             
-        // We need to support vector operations. 
-        // Example: C > MA(C, 20)
-        // Evaluates to: C[i] > MA_Result[i]
-        
         // Dynamic Vector Evaluation
         const evalVector = new Function('ctx', `
             with(ctx) {
@@ -250,9 +216,6 @@ export class FormulaEngine {
         `);
         
         const resultSeries = evalVector(context);
-        
-        // If result is an array (boolean array), check last element
-        // If result is a single boolean, use it
         
         let finalVal = false;
         if (Array.isArray(resultSeries)) {
