@@ -1,4 +1,5 @@
-import { Env, jsonResponse, errorResponse, fetchAkTools, PagesFunction } from '../../utils';
+
+import { Env, jsonResponse, errorResponse, fetchAkTools, PagesFunction, checkD1Binding } from '../../utils';
 
 interface StockItem {
   code: string;
@@ -7,6 +8,10 @@ interface StockItem {
 }
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
+  // Check D1 Binding
+  const dbError = checkD1Binding(context.env);
+  if (dbError) return dbError;
+
   const url = new URL(context.request.url);
   const keyword = url.searchParams.get('keyword');
 
